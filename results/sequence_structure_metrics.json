@@ -1,0 +1,29 @@
+{
+  "model": "sequence_structure",
+  "n": 130,
+  "positive_rate": 0.5,
+  "accuracy": 0.5615384615384615,
+  "f1": 0.5581395348837209,
+  "roc_auc": 0.5673372781065089,
+  "average_precision": 0.593837842996921,
+  "confusion_matrix": [
+    [
+      37,
+      28
+    ],
+    [
+      29,
+      36
+    ]
+  ],
+  "cv": "StratifiedGroupKFold, 5 splits; exact-sequence groups",
+  "seed": 42,
+  "threshold": 0.5,
+  "numeric_features": [
+    "normalized_mfe",
+    "paired_fraction"
+  ],
+  "tfidf": "4-mer, fit within training fold",
+  "C": 1.0,
+  "interpretation": "Predicts membership in a selected strong gene-level consensus subset; exploratory"
+}

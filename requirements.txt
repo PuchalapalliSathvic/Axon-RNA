@@ -1,0 +1,12 @@
+numpy>=1.26
+pandas>=2.0
+scikit-learn>=1.4
+scipy>=1.11
+matplotlib>=3.9
+joblib>=1.3
+pytest>=8.0
+requests>=2.31
+mygene>=3.2
+# Optional for RNA-FM backend:
+# torch>=2.2
+# rna-fm

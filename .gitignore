@@ -1,0 +1,27 @@
+# macOS
+.DS_Store
+__MACOSX/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+
+# Local caches
+.cache/
+data/real/cache/
+
+# Raw public datasets
+data/real/raw/
+
+# Local backups
+backups/
+
+# IDE
+.vscode/
+.idea/
+
+# Environments
+.env
+.venv/
+venv/

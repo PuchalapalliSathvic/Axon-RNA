@@ -1,0 +1,13 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "axon-rna"
+version = "0.1.0"
+description = "Knowledge-augmented RNA AI research pipeline for Alzheimer's disease"
+requires-python = ">=3.10"
+dependencies = ["numpy", "pandas", "scikit-learn>=1.4", "scipy", "joblib", "matplotlib>=3.9", "requests>=2.31", "mygene>=3.2"]
+
+[tool.setuptools.packages.find]
+where = ["src"]

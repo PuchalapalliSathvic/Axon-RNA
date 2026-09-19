@@ -1,0 +1,10 @@
+{
+  "completed": false,
+  "dependencies": {
+    "torch": true,
+    "fm": false
+  },
+  "reason": "RNA-FM extraction not run; requires rna-fm package and pretrained weights",
+  "sequence_strategy": "first min(1000, transcript length) nt; mean pool nucleotide representations",
+  "device": "cpu"
+}

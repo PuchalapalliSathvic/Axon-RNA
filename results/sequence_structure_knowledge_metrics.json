@@ -1,0 +1,35 @@
+{
+  "model": "sequence_structure_knowledge",
+  "n": 130,
+  "positive_rate": 0.5,
+  "accuracy": 0.5461538461538461,
+  "f1": 0.5042016806722689,
+  "roc_auc": 0.5479289940828403,
+  "average_precision": 0.5413948732983604,
+  "confusion_matrix": [
+    [
+      41,
+      24
+    ],
+    [
+      35,
+      30
+    ]
+  ],
+  "cv": "StratifiedGroupKFold, 5 splits; exact-sequence groups",
+  "seed": 42,
+  "threshold": 0.5,
+  "numeric_features": [
+    "normalized_mfe",
+    "paired_fraction",
+    "go_synaptic",
+    "go_rna_processing",
+    "go_neuroinflammation",
+    "go_neuronal",
+    "go_count",
+    "pathway_count"
+  ],
+  "tfidf": "4-mer, fit within training fold",
+  "C": 1.0,
+  "interpretation": "Predicts membership in a selected strong gene-level consensus subset; exploratory"
+}

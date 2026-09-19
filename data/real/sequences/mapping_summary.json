@@ -1,0 +1,16 @@
+{
+  "candidates": {
+    "total": 65,
+    "mapped": 65,
+    "failed": 0,
+    "mane_select": 64,
+    "canonical_fallback": 1
+  },
+  "all_requested": {
+    "total": 130,
+    "mapped": 130,
+    "failed": 0,
+    "mane_select": 127,
+    "canonical_fallback": 3
+  }
+}

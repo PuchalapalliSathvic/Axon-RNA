@@ -1,0 +1,5 @@
+accession,tissue,platform,n_samples,ad_samples,control_samples,role,supplementary_file,notes
+GSE53697,dorsolateral prefrontal cortex,Illumina HiSeq 2500,17,9,8,discovery,GSE53697_RNAseq_AD.txt.gz,"Public bulk RNA-seq; processed table contains Entrez IDs/symbols plus raw reads/RPKM."
+GSE159699,postmortem temporal lobe,Illumina NextSeq 500,30,12,10,replication,GSE159699_summary_count.star.txt.gz,"12 AD and 10 older-control libraries in the analyzed count matrix; eight young controls excluded. Library counts are not verified unique-donor counts; donor/region audit remains needed."
+GSE163877,middle temporal gyrus,Ion Torrent Proton,7,3,4,ncRNA_extension,GSE163877_VBB_Counts.txt.gz,"Simultaneous coding/non-coding RNA-seq; small cohort, therefore used as an extension rather than primary discovery."
+GSE125583,fusiform gyrus,Illumina HiSeq 2500,289,,,future_large_validation,per_sample_tsv,"Large public cohort; processed data are supplied as per-sample files and will be integrated after v1."

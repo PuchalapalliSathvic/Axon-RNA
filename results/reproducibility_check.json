@@ -1,0 +1,17 @@
+{
+  "offline_pipeline_completed": true,
+  "metrics_and_predictions_byte_identical": true,
+  "checks": {
+    "results/real_model_comparison.csv": {
+      "before_sha256": "b3e66c268a07e6b540ef58cec5aef83ae6ba3709166f8e8cb1528b8a9bf0da0d",
+      "after_sha256": "b3e66c268a07e6b540ef58cec5aef83ae6ba3709166f8e8cb1528b8a9bf0da0d",
+      "identical": true
+    },
+    "results/real_model_predictions.csv": {
+      "before_sha256": "e218f1d093c5ade2c4be12de787d48b9beccdd3a34a5542ffd29f2b216b382c0",
+      "after_sha256": "e218f1d093c5ade2c4be12de787d48b9beccdd3a34a5542ffd29f2b216b382c0",
+      "identical": true
+    }
+  },
+  "log": "results/real_pipeline_replay.log"
+}
