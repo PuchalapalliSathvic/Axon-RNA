@@ -1,26 +1,65 @@
 # AXON-RNA
 
-AXON-RNA is an exploratory research portfolio on RNA dysregulation in human Alzheimer’s disease (AD) brain tissue. It combines an existing three-cohort gene-expression screen with real representative transcript sequences, ViennaRNA folding, and generic biological annotations.
+**Cross-cohort Alzheimer’s RNA analysis using sequence, secondary structure, and biological knowledge.**
 
-**The real-data classical pipeline is complete and reproducible from cached inputs.** The current experiment contains 65 strong consensus candidates and 65 reference genes. Its results are modest: sequence-only ROC-AUC is 0.507; adding structure gives 0.567. These are gene-level, held-out results—not patient diagnosis, isoform-level discoveries, or validated biomarkers. See [final status](VALIDATION.md) for validation and exact metrics.
+AXON-RNA is an exploratory research project that asks whether RNA sequence, predicted secondary structure, and biological annotations can help prioritize genes that show reproducible dysregulation across independent Alzheimer’s disease (AD) brain transcriptomic cohorts.
 
-![Real project summary](results/figures/project_summary.png)
+The current experiment contains **65 strong consensus candidates** and **65 reference genes**. Results are intentionally reported conservatively: the sequence-only model achieved ROC-AUC **0.507**, while adding RNA structure increased ROC-AUC to **0.567**. These are gene-level held-out results—not patient diagnosis, isoform-level discoveries, validated biomarkers, or evidence of clinical utility.
 
-## Problem and research question
+See [`VALIDATION.md`](VALIDATION.md) for exact validation details.
 
-Individual postmortem brain studies can disagree because of sampling, tissue composition, disease stage, and technical differences. AXON-RNA first asks which genes show reproducible directional changes across cohorts, then tests whether properties of their representative RNAs help prioritize that selected gene set.
+![AXON-RNA project summary](results/figures/project_summary.png)
 
-> Can RNA sequence, secondary structure, and biological knowledge improve prioritization of reproducibly dysregulated transcripts in Alzheimer’s disease compared with sequence-only representations?
+---
 
-That is the broader research question. **This implementation tests a narrower proxy: prediction of strong gene-level consensus membership using one representative transcript per gene.** It cannot establish which transcript isoform changed.
+## Research question
+
+> Can RNA sequence, secondary structure, and biological knowledge improve prioritization of reproducibly dysregulated genes in Alzheimer’s disease compared with sequence-only representations?
+
+The broader question concerns RNA dysregulation, but this implementation tests a narrower proxy: **prediction of strong gene-level consensus membership using one representative transcript per gene**. The analysis therefore does not establish which transcript isoform changed in the original tissue samples.
+
+---
+
+## System design
+
+The pipeline moves from independent AD brain transcriptomic cohorts to cross-study consensus discovery, representative transcript mapping, RNA sequence and structure analysis, biological knowledge features, and held-out model evaluation.
+
+![AXON-RNA system design](docs/assets/Flow.png)
+
+---
 
 ## Why this matters
 
-Sequence composition, RNA folding, and annotated biological functions provide different descriptions of a gene. Comparing them under the same evaluation makes it possible to test whether added information helps, without assuming that a larger or more complicated model is better. A weak result is useful here: it limits what can responsibly be inferred from this small dataset.
+Independent postmortem brain studies can disagree because of tissue composition, disease stage, sampling, technical variation, and cohort size. AXON-RNA first searches for genes with reproducible directional changes across cohorts and then asks whether properties of their representative RNAs provide additional predictive signal.
 
-## Real datasets and cohort overview
+Sequence composition, RNA folding, and functional annotations describe different aspects of the same gene. Comparing them under the same evaluation framework makes it possible to test whether added biological information helps rather than assuming that a more complex representation must perform better.
 
-The analysis preserves the existing processed cohort files. Counts below describe libraries used in those files, not necessarily unique donors.
+---
+
+## Related work and inspiration
+
+AXON-RNA is **not a reproduction of a single published paper**. It was developed as an independent research-engineering project informed by several established areas:
+
+- cross-cohort transcriptomic analysis in Alzheimer’s disease;
+- RNA sequence representation and RNA language models;
+- RNA secondary-structure prediction;
+- functional annotation with Gene Ontology and pathway databases;
+- integration of biological knowledge with machine-learning models.
+
+Core public tools and resources used by the project include:
+
+- **NCBI GEO** — public transcriptomic datasets;
+- **Ensembl / MANE Select** — representative transcript mapping;
+- **ViennaRNA / RNAfold** — RNA secondary-structure prediction;
+- **MyGene.info** — programmatic gene annotation;
+- **Gene Ontology (GO)** — functional biological annotations;
+- **Reactome** — pathway knowledge.
+
+RNA foundation models such as **RNA-FM** are relevant inspiration for future extensions, but **no pretrained RNA foundation model contributes to the results reported here**.
+
+---
+
+## Datasets
 
 | GEO cohort | Tissue recorded in project | AD libraries | Control libraries | Tested genes |
 |---|---|---:|---:|---:|
@@ -28,172 +67,344 @@ The analysis preserves the existing processed cohort files. Counts below describ
 | [GSE159699](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE159699) | Temporal lobe; region-bearing sample names | 12 | 10 older controls | 23,206 |
 | [GSE163877](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE163877) | Middle temporal gyrus | 3 | 4 | 29,509 |
 
-GSE159699’s eight young-control libraries are excluded. Its A/T sample suffixes and repeated numeric identifiers require a donor/region audit before treating libraries as independent biological replicates. The supplied registry originally said 11 AD samples; it has been corrected to the 12 AD libraries found in the count matrix and processed analysis. [GSE125583](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE125583) remains a future validation cohort and contributes no results here.
+GSE159699’s eight young-control libraries are excluded. Its repeated donor/sample identifiers require a donor/region audit before the libraries can be treated as fully independent biological replicates.
 
-## Method and cross-study consensus
+A fourth cohort, [GSE125583](https://www.ncbi.nlm.nih.gov/geo/query/acc.cgi?acc=GSE125583), is reserved as a possible future validation cohort and does not contribute to the current results.
 
-The existing screen computes library-size normalized log2(CPM + 1), compares group means with Welch tests, and applies within-cohort Benjamini–Hochberg adjustment. The stored `log2fc` is a difference in mean log-transformed abundance, not a count-model coefficient. This is preliminary screening, without clinical covariates or cell-composition adjustment.
+---
 
-`src/axon_rna/discovery.py` combines study p-values with Fisher’s method and calculates direction consistency and an evidence score:
+## Cross-study consensus discovery
 
-`abs(median_log2fc) × direction_consistency × (0.5 + significant_fraction)`
+The screening analysis performs:
 
-The existing consensus-positive rule is: at least two studies, direction consistency ≥0.75, and combined p <0.05. The preserved output contains:
+1. library-size normalization;
+2. `log2(CPM + 1)` transformation;
+3. Welch tests within each cohort;
+4. Benjamini–Hochberg adjustment within each cohort;
+5. cross-study evidence integration using Fisher’s method;
+6. direction-consistency scoring across studies.
 
-- **36,907** unique genes in the union;
-- **13,738** measured in all three cohorts;
+The evidence score used in the discovery stage is:
+
+```text
+abs(median_log2fc) × direction_consistency × (0.5 + significant_fraction)
+```
+
+The harmonized analysis contains:
+
+- **36,907** unique genes across the study union;
+- **13,738** genes measured in all three cohorts;
 - **1,255** consensus-positive genes;
-- **65** strong candidates: all three cohorts, fully consistent direction, combined p <0.01, and absolute median effect ≥0.5.
+- **65** strong candidates satisfying all three of the following:
+  - measured in all three cohorts,
+  - fully consistent effect direction,
+  - combined p-value < 0.01,
+  - absolute median effect ≥ 0.5.
 
-The strong rule does not require individual-cohort FDR significance, and Fisher-combined p-values have not been adjusted across genes. “Strong” identifies a filtering rule, not an independently validated biological status. Validation recomputes consensus from `all_real_studies.csv` and checks equality with the preserved table.
+“Strong” refers to this filtering rule. It is not an independently validated biological label.
 
-![Top strong candidates](results/figures/top_consensus_genes.png)
-![Effects across cohorts](results/figures/consensus_direction_heatmap.png)
+![Top consensus genes](results/figures/top_consensus_genes.png)
 
-## Gene-level measurements and sequence mapping
+![Cross-cohort direction heatmap](results/figures/consensus_direction_heatmap.png)
 
-Historical real DE/consensus files use a column named `transcript_id` for **gene symbols**. New modeling files rename this field to `gene` and reserve `transcript_id` for a versioned Ensembl transcript accession.
+---
 
-`scripts/real_data/fetch_real_sequences.py` queries the public [Ensembl lookup API](https://rest.ensembl.org/documentation/info/symbol_lookup) with expanded transcript and MANE information. It selects MANE Select when available, otherwise the gene’s explicit Ensembl canonical transcript. It never chooses an arbitrary longest transcript. It retrieves spliced cDNA, converts T to U, checks sequence length against exon lengths, and rejects ambiguous bases instead of deleting them.
+## Representative transcript mapping
 
-All **65/65 candidates** mapped: **64 MANE Select, one canonical fallback**. All **130/130 modeling genes** mapped: **127 MANE Select, three canonical fallbacks**. The sequence table includes gene ID, versioned transcript ID, selection method, assembly, resolved symbol, source URLs, sequence, length, and mapping status. HTTP responses include retrieval timestamps and are cached unchanged.
+The expression measurements are gene-level. For sequence-based analysis, each selected gene is mapped to one representative Ensembl transcript.
 
-- Candidate CSV/FASTA: `data/real/sequences/real_candidate_sequences.*`
-- Both classes: `data/real/sequences/real_model_sequences.*`
-- Audit summary: `data/real/sequences/mapping_summary.json`
+Selection strategy:
 
-A representative transcript is not evidence that this particular isoform is expressed in the sampled tissue or dysregulated in AD. Isoform-specific claims require transcript-level quantification.
+1. prefer **MANE Select** when available;
+2. otherwise use the explicit Ensembl canonical transcript;
+3. retrieve spliced cDNA;
+4. convert DNA `T` to RNA `U`;
+5. validate sequence length and alphabet.
 
-## RNA structure
+Mapping succeeded for:
 
-`scripts/real_data/fold_real_sequences.py` uses **RNAfold 2.7.2**, 37°C, default energy parameters, and `--noPS`. There is no synthetic or proxy fallback in the real pipeline.
+- **65/65 candidate genes**;
+- **130/130 modeling genes**;
+- **127 MANE Select transcripts**;
+- **3 canonical fallbacks**.
 
-Every gene uses the **first min(1,000, transcript length) nucleotides** of its representative RNA, with one-based inclusive coordinates recorded. All 130 folds succeeded. Ten transcripts fit entirely within the window; 120 were windowed. Full transcript lengths range from 104 to 21,157 nt. The full fetched sequences remain available.
+Representative transcript sequence is an analysis input. It is **not evidence that the selected isoform itself was dysregulated in the original AD tissue**.
 
-`data/real/structures/real_structure_features.csv` records MFE, MFE divided by **folded length**, paired-base fraction, full-sequence GC, window GC, dot-bracket structure, coordinates, truncation flag, version, and status. Only normalized MFE and paired fraction enter the structure model. GC is descriptive; it is not counted as a structural improvement.
+---
 
-The six requested candidates have RNAplot SVGs and arc-diagram PNGs under `results/rna_structures/real/`. These depict exactly the folded windows used in modeling. Windowed folding omits distant interactions and is not an in-vivo structure measurement.
+## RNA secondary structure
 
-![VGF window structure](results/rna_structures/real/VGF_structure.png)
+RNA structure is computed with **ViennaRNA / RNAfold 2.7.2** at 37°C using default energy parameters.
 
-## Modeling dataset and class balance
+For each representative transcript, the model uses the first:
 
-Positive genes are the 65 strong candidates defined above. References are a fixed-seed sample of 65 genes from the **13,005 genes measured in all three cohorts that are not consensus-positive**. Sampling sorts the eligible pool by gene and uses seed 42. Other consensus-positive genes are excluded, rather than mislabeled as references.
+```text
+min(1,000, transcript length)
+```
 
-No expression abundance field is available in the consensus table, so the reference set is not expression-matched. Three-cohort coverage provides a basic information requirement. Mapping/folding failures are retained in the dataset with an inclusion flag; no silent replacement sampling occurs. There were no failures in this run.
+nucleotides.
 
-The balanced set is a manageable pilot, not an estimate of population prevalence. References are not proven unaffected genes. Average precision and predicted probabilities cannot be interpreted at transcriptome-wide prevalence without a different evaluation. All labels, DE statistics, sequences, structures, and knowledge fields are retained in `data/real/modeling/real_model_dataset.csv`; only explicitly allowed inputs enter models.
+The structure feature table records:
 
-## Knowledge augmentation
+- minimum free energy (MFE);
+- normalized MFE;
+- paired-base fraction;
+- full-sequence GC content;
+- folded-window GC content;
+- dot-bracket structure;
+- folded coordinates;
+- truncation status.
 
-Both classes receive equivalent [MyGene queries](https://docs.mygene.info/en/latest/doc/query_service.html) for GO terms and pathways, using mapped human Ensembl gene IDs. All 130 queries succeeded. This avoids using old candidate annotations for positives while querying a different source or time point only for references. The existing enriched annotations are preserved as `prior_go_terms` and `prior_pathways` for audit.
+Only **normalized MFE** and **paired-base fraction** are used as structure-model features.
 
-The six modeled features are:
+Six example RNA structures are visualized in `results/rna_structures/real/`.
 
-| Feature | Deterministic rule |
+![VGF predicted RNA structure](results/rna_structures/real/VGF_structure.png)
+
+These are computational predictions, not experimentally measured in-vivo RNA structures.
+
+---
+
+## Biological knowledge features
+
+Both candidate and reference genes receive equivalent MyGene queries using mapped human Ensembl gene IDs.
+
+The modeled knowledge features are:
+
+| Feature | Rule |
 |---|---|
-| `go_synaptic` | A GO term contains `synap` |
+| `go_synaptic` | GO term contains `synap` |
 | `go_rna_processing` | GO terms match RNA processing/splicing, spliceosome, rRNA, or tRNA processing |
 | `go_neuroinflammation` | GO terms match inflammation, microglia, immune, or cytokine keywords |
 | `go_neuronal` | GO terms match neuron, axon, dendrite, or synapse keywords |
 | `go_count` | Number of distinct returned GO term names |
 | `pathway_count` | Number of distinct source-qualified pathway names |
 
-These are broad annotation proxies, not assertions of AD-specific mechanism. A zero means no matching returned annotation. Failed queries remain missing; absence of annotation does not establish absence of biological function.
+These are broad annotation proxies rather than claims of AD-specific mechanism.
 
-Manual and automated literature remain separate columns and source files. Manual strength is encoded as strong=3, moderate=2, limited=1; **unclear and unreviewed remain missing**, with raw categories retained. For individual evidence flags, yes=1, no=0, limited=1, and unclear=missing; this is an ordinal convenience, not a probability. Human, mechanistic, tau, amyloid, synaptic and inflammatory fields remain auditable. Automated hits retain their own prefixes.
+Manual and automated literature curation are retained for interpretation and audit, but **literature-derived features are excluded from all reported predictive models** because the curation coverage is not equivalent between classes.
 
-**Literature fields are excluded from all reported models.** They were reviewed/screened primarily for positive candidates, so using their coverage would reveal the label. Some papers also concern expression studies related to the discovery question. Existing citations are inherited curation, not newly verified literature claims.
+---
 
-## Modeling comparison and results
+## Modeling dataset
 
-Each model uses 4-mer character TF-IDF and logistic regression (`C=1`, balanced class weights, maximum 3,000 iterations). Generic numeric inputs use median imputation and standard scaling. **TF-IDF, imputation, and scaling are fitted separately within each training fold.** DE statistics, evidence score, gene names, transcript IDs, literature, and mapping status are excluded from features.
+The modeling set contains:
 
-All four models use the same five `StratifiedGroupKFold` splits with seed 42. Exact duplicate sequences are kept together. Each gene receives one held-out prediction; folds are saved in `data/real/modeling/cv_splits.csv`. Homologous genes are not clustered. There is no hyperparameter search or threshold optimization.
+- **65 strong consensus candidates**;
+- **65 reference genes** sampled from genes measured in all three cohorts that are not consensus-positive;
+- **130 total genes**.
+
+Reference genes are not proven biologically unaffected genes. The balanced set is a controlled pilot evaluation and does not represent transcriptome-wide disease prevalence.
+
+Each gene receives one held-out prediction using the same five `StratifiedGroupKFold` splits. Exact duplicate sequences are kept in the same fold.
+
+---
+
+## Models
+
+All models use logistic regression with a sequence representation based on **4-mer character TF-IDF**.
+
+Four model variants are compared:
+
+1. **Sequence only**
+2. **Sequence + structure**
+3. **Sequence + knowledge**
+4. **Sequence + structure + knowledge**
+
+TF-IDF, numeric imputation, and scaling are fitted independently inside each training fold to avoid preprocessing leakage.
+
+Differential-expression statistics, evidence scores, gene names, transcript IDs, literature evidence, and mapping status are excluded from the predictive feature set.
+
+---
+
+## Results
 
 | Model | ROC-AUC | Average precision | F1 | Accuracy |
 |---|---:|---:|---:|---:|
 | Sequence | 0.507219 | 0.518625 | 0.518519 | 0.500000 |
-| Sequence + structure | 0.567337 | 0.593838 | 0.558140 | 0.561538 |
+| Sequence + structure | **0.567337** | **0.593838** | **0.558140** | **0.561538** |
 | Sequence + knowledge | 0.521420 | 0.526670 | 0.461538 | 0.515385 |
 | Sequence + structure + knowledge | 0.547929 | 0.541395 | 0.504202 | 0.546154 |
 
-These are pooled out-of-fold metrics on 130 genes; F1/accuracy use threshold 0.5. Structure increases ROC-AUC by **0.060118**. Knowledge increases ROC-AUC by **0.014201**, while reducing F1. Adding both does not outperform structure alone. The experiment does **not** establish a robust benefit from knowledge or a statistically reliable structural improvement. Fold-level metrics are saved; no external validation or formal paired significance test has been completed.
+The clearest numerical improvement comes from adding structure features:
 
-Knowledge importance is held-out permutation importance: 20 permutations per fold for the sequence-plus-knowledge model, summarized as mean ROC-AUC decrease with fold standard deviation. It measures model reliance, not causality.
+```text
+ROC-AUC: 0.507 → 0.567
+```
+
+Knowledge features produce a smaller change:
+
+```text
+ROC-AUC: 0.507 → 0.521
+```
+
+Adding both structure and knowledge does not outperform structure alone.
+
+These differences are **descriptive results on one small selected dataset**. They do not establish a statistically reliable benefit from structure or knowledge.
 
 ![Model comparison](results/figures/model_comparison.png)
+
 ![ROC curves](results/figures/roc_curve.png)
+
 ![Precision-recall curves](results/figures/precision_recall_curve.png)
+
 ![Confusion matrices](results/figures/confusion_matrix.png)
-![Structure distributions](results/figures/structure_feature_comparison.png)
-![Knowledge importance](results/figures/knowledge_feature_importance.png)
 
-## Limitations and next research directions
+![Structure feature comparison](results/figures/structure_feature_comparison.png)
 
-The main limitations are selected-set size, gene-level labels, unadjusted combined significance, simple DE screening, possible donor dependence, tissue/cell composition, unmatched reference expression, annotation coverage bias, sequence homology across folds, and windowed folding. Random gene cross-validation is not validation in an untouched cohort: every label was derived from the same three-cohort screen.
+![Knowledge feature importance](results/figures/knowledge_feature_importance.png)
 
-Next steps are a donor/region metadata audit, covariate-aware DE appropriate to each count matrix, combined-test FDR analysis, expression/biotype-matched references, repeated or homology-grouped evaluation, and an untouched external cohort. Transcript-level quantification and isoform-aware validation would be needed to answer the broader research question directly. Literature features need equivalent blinded curation in both classes before predictive use.
+---
 
-RNA-FM extraction is optional. Torch is available locally, but `rna-fm` and pretrained weights are not installed. `extract_rna_embeddings.py --check` reports this without downloading weights; no embeddings or foundation-model metrics were fabricated. Actual extraction, if separately installed, uses CPU and a documented 1,000-nt window. Embedding comparisons remain future work.
+## Reproducibility
 
-## Reproducibility and how to run
+### Requirements
 
-From the repository root, use Python ≥3.10 and an environment with RNAfold/RNAplot on PATH:
+- Python ≥ 3.10
+- ViennaRNA with `RNAfold` and `RNAplot` available on `PATH`
+
+Install Python dependencies:
 
 ```bash
 pip install -r requirements.txt
+```
+
+Verify ViennaRNA:
+
+```bash
 RNAfold --version
+```
+
+### First run on a fresh clone
+
+The repository does **not** commit raw GEO downloads or local HTTP/RNAfold caches.
+
+A fresh clone should therefore populate the required public-data caches first:
+
+```bash
+python scripts/real_data/run_real_pipeline.py
+```
+
+This step requires network access to the public Ensembl/MyGene services used by the pipeline.
+
+### Reproducible offline rerun
+
+After caches have been populated locally:
+
+```bash
 python scripts/real_data/run_real_pipeline.py --offline
+```
+
+Run the test suite:
+
+```bash
 pytest -q
 ```
 
-The offline command rebuilds sequence tables, folds, annotations, models, plots, and final validation from the preserved real consensus and local caches. Without populated caches, run once without `--offline` to access public Ensembl/MyGene services. Cached responses are reused; a new database snapshot requires deliberately archiving/replacing the cache, not silently refreshing it. The runner updates only the new real pipeline artifacts and its real figures.
-
-Stages can also be run individually:
-
-```bash
-python scripts/real_data/fetch_real_sequences.py --include-reference
-python scripts/real_data/fold_real_sequences.py
-python scripts/real_data/build_real_dataset.py
-python scripts/real_data/train_real_models.py
-python scripts/real_data/plot_real_results.py
-python scripts/real_data/extract_rna_embeddings.py --check
-python scripts/real_data/validate_real_project.py
-```
-
-`results/run_manifest.json` records input/source/cache SHA-256 hashes and installed package versions. `results/test_output.txt` contains the latest test report. Validation checks consensus reconstruction, prediction membership and scores, duplicate-sequence fold isolation, structural lengths, and required figures. Tests cover selection, mapping helpers, sequence validation, missing evidence, folding, joins, and fold-local preprocessing.
-
-
-## Repository structure and demo separation
+Current validation:
 
 ```text
-data/real/raw/                 supplied GEO matrices
-data/real/processed/           preserved DE and harmonized study tables
-data/real/sequences/           actual human representative RNAs, CSV + FASTA
-data/real/structures/          actual RNAfold features and coordinates
-data/real/modeling/            selected genes, annotations, dataset, CV folds
-data/real/cache/               timestamped HTTP responses and RNAfold output
-scripts/real_data/             real ingestion and modeling commands
-src/axon_rna/real_data.py      mapping, selection, feature and join helpers
-src/axon_rna/real_modeling.py  fold-local estimators and shared split logic
-results/real_*                 real results and provenance
-results/figures/real_*.png     real figures (plus project_summary.png)
-results/rna_structures/real/   real RNA window illustrations
-tests/                        existing tests and real-pipeline tests
-data/demo/                    synthetic inputs only
+12 passed
 ```
 
-**Synthetic demo artifacts are not AD findings.** The original scripts remain usable, and existing outputs were retained in place to avoid breaking them. `results/README.md` and directory-level README files identify the boundary. In particular, `results/consensus.csv`, `demo_predictions.csv`, `foundation_metrics.json`, `knowledge_metrics.json`, unprefixed model figures, and `TX*.png` structures belong to the synthetic demo. The legacy file name `foundation_metrics.json` does not prove a pretrained foundation model ran. Demo preprocessing/results are software examples and are not used for real-data claims or fair-model comparison.
+`results/run_manifest.json` records source/input hashes and package versions.  
+`results/reproducibility_check.json` records reproducibility checks.  
+`results/test_output.txt` contains the most recent automated test output.
 
-To exercise the separate synthetic workflow:
+See [`VALIDATION.md`](VALIDATION.md) for the full validation summary.
 
-```bash
-python scripts/make_demo_data.py
-python scripts/run_discovery.py --input data/demo/studies.csv --output results/consensus.csv
-python scripts/run_foundation.py --consensus results/consensus.csv --sequences data/demo/sequences.csv --output results/foundation_metrics.json
-python scripts/run_knowledge.py --consensus results/consensus.csv --sequences data/demo/sequences.csv --knowledge data/demo/knowledge.csv --output results/knowledge_metrics.json
-python scripts/make_all_visuals.py
+---
+
+## Repository structure
+
+```text
+AXON-RNA/
+├── README.md
+├── VALIDATION.md
+├── requirements.txt
+├── pyproject.toml
+│
+├── data/
+│   └── real/
+│       ├── processed/
+│       ├── sequences/
+│       ├── structures/
+│       └── modeling/
+│
+├── docs/
+│   └── assets/
+│       └── Flow.png
+│
+├── results/
+│   ├── figures/
+│   ├── rna_structures/
+│   ├── consensus_genes.csv
+│   ├── strong_candidates.csv
+│   ├── model_comparison.csv
+│   ├── model_predictions.csv
+│   ├── knowledge_feature_importance.csv
+│   ├── reproducibility_check.json
+│   └── run_manifest.json
+│
+├── scripts/
+│   ├── run_discovery.py
+│   └── real_data/
+│
+├── src/
+│   └── axon_rna/
+│
+└── tests/
 ```
 
-None of these demo commands contributes to the real metrics reported above.
+Raw GEO files and local caches are intentionally excluded from version control.
+
+---
+
+## Limitations
+
+The main limitations are:
+
+- small selected modeling set;
+- gene-level rather than isoform-level labels;
+- simplified differential-expression screening;
+- possible donor dependence in cohort metadata;
+- no cell-composition adjustment;
+- unmatched reference expression levels;
+- broad annotation features and annotation-coverage bias;
+- sequence homology may cross evaluation folds;
+- RNA structure is predicted only from the 5′ window up to 1,000 nt;
+- no untouched external validation cohort;
+- no formal paired significance test for model differences.
+
+The current results should therefore be interpreted as **exploratory research evidence**, not clinical or mechanistic conclusions.
+
+---
+
+## Next steps
+
+Planned research extensions include:
+
+- donor/region metadata auditing;
+- covariate-aware differential-expression modeling;
+- combined-test FDR analysis;
+- expression- and biotype-matched references;
+- repeated or homology-aware evaluation;
+- validation on an untouched external cohort;
+- transcript-level / isoform-aware quantification;
+- systematic literature curation across both classes;
+- optional comparison with pretrained RNA foundation-model embeddings.
+
+---
+
+## Project status
+
+The classical AXON-RNA pipeline is complete and validated locally.
+
+- 130/130 representative transcripts mapped
+- 130/130 RNAfold predictions completed
+- 5-fold held-out predictions generated for all genes
+- 12 automated tests passing
+- reproducibility and provenance manifests generated
+- RNA foundation-model stage remains optional future work
+
+For exact metrics, implementation checks, and remaining caveats, see [`VALIDATION.md`](VALIDATION.md).
